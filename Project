@@ -1,0 +1,128 @@
+#DATA GENERATION
+
+import pandas as pd
+import random
+
+from faker import Faker
+
+fake = Faker()
+
+num_students = 10000
+subjects = ["Electronics", "Programming", "Database", "Data Science", "Mathematics", "DSA"]
+
+# Generate student profiles
+student_data = []
+for i in range(num_students):
+    student_data.append({
+        "StudentID": i + 1,
+        "Name": fake.name(),
+        "Department": random.choice(["Computer Science", "Electrical Engineering", "Mathematics"]),
+        "Email": fake.email()
+    })
+
+students_df = pd.DataFrame(student_data)
+
+# Generate subject marks
+marks_data = []
+for student_id in range(1, num_students + 1):
+    student_marks = {"StudentID": student_id}
+    for subject in subjects:
+        student_marks[subject] = random.randint(0, 100)  # Random marks between 0 and 100
+    marks_data.append(student_marks)
+
+marks_df = pd.DataFrame(marks_data)
+
+# Save data to CSV files (you can also save to HDFS later)
+students_df.to_csv("students.csv", index=False)
+marks_df.to_csv("marks.csv", index=False)
+
+print("Data generation complete.")
+
+
+#SPARK DATA PROCESSING
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import avg, stddev, col
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("ResultAnalysis").getOrCreate()
+
+# Load data from CSV (or HDFS if you've moved it there)
+students_df = spark.read.csv("students.csv", header=True, inferSchema=True)
+marks_df = spark.read.csv("marks.csv", header=True, inferSchema=True)
+
+# Join students and marks data
+joined_df = students_df.join(marks_df, "StudentID")
+
+# Calculate total marks and percentage
+for subject in subjects:
+    joined_df = joined_df.withColumn(subject, col(subject).cast("double"))  # Ensure numeric type
+
+joined_df = joined_df.withColumn("TotalMarks", sum(col(subject) for subject in subjects))
+joined_df = joined_df.withColumn("Percentage", col("TotalMarks") / len(subjects))
+
+# Basic analysis (subject-wise averages and standard deviations)
+subject_stats = {}
+for subject in subjects:
+    stats = joined_df.agg(avg(subject).alias("Average"), stddev(subject).alias("StdDev")).collect()[0]
+    subject_stats[subject] = {"Average": stats["Average"], "StdDev": stats["StdDev"]}
+
+# Display results (you can also save to a file or database)
+for subject, stats in subject_stats.items():
+    print(f"Subject: {subject}, Average: {stats['Average']:.2f}, StdDev: {stats['StdDev']:.2f}")
+
+# Stop Spark session
+spark.stop()
+
+#STATISTICAL ANALYSIS
+
+import pandas as pd
+
+marks_df = pd.read_csv("marks.csv")
+
+# Calculate basic statistics
+subject_stats = marks_df.describe()
+
+# Calculate pass/fail rates (assuming passing mark is 40)
+passing_marks = 40
+pass_fail_rates = {}
+for subject in subjects:
+    passed = marks_df[marks_df[subject] >= passing_marks][subject].count()
+    total = marks_df[subject].count()
+    pass_rate = (passed / total) * 100
+    pass_fail_rates[subject] = {"PassRate": pass_rate, "FailRate": 100 - pass_rate}
+
+print(subject_stats)
+print(pass_fail_rates)
+
+#DASHBOARD
+
+import dash
+from dash import dcc, html
+import plotly.graph_objs as go
+import pandas as pd
+
+marks_df = pd.read_csv("marks.csv")
+
+app = dash.Dash(__name__)
+
+app.layout = html.Div(children=[
+    html.H1(children='University Result Dashboard'),
+
+    dcc.Graph(
+        id='subject-averages',
+        figure={
+            'data': [
+                {'x': subjects, 'y': marks_df[subjects].mean(), 'type': 'bar', 'name': 'Average Marks'},
+            ],
+            'layout': {
+                'title': 'Subject-wise Average Marks'
+            }
+        }
+    ),
+
+    # Add more graphs and components as needed
+])
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
