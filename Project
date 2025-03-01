@@ -47,7 +47,7 @@ from pyspark.sql.functions import avg, stddev, col
 # Initialize Spark session
 spark = SparkSession.builder.appName("ResultAnalysis").getOrCreate()
 
-# Load data from CSV (or HDFS if you've moved it there)
+# Load data from CSV 
 students_df = spark.read.csv("students.csv", header=True, inferSchema=True)
 marks_df = spark.read.csv("marks.csv", header=True, inferSchema=True)
 
@@ -121,7 +121,7 @@ app.layout = html.Div(children=[
         }
     ),
 
-    # Add more graphs and components as needed
+    
 ])
 
 if __name__ == '__main__':
